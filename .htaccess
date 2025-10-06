@@ -1,0 +1,31 @@
+# Protección de archivos sensibles
+<FilesMatch "(\.htaccess|\.htpasswd|\.ini|\.log|\.sql|\.bak)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Prevenir listado de directorios
+Options -Indexes
+
+# Proteger carpeta de configuración
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^config/ - [F,L]
+</IfModule>
+
+# Configuración de PHP para uploads
+php_value upload_max_filesize 5M
+php_value post_max_size 5M
+php_value max_execution_time 300
+php_value max_input_time 300
+
+# Seguridad adicional
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# Página de error personalizada (opcional)
+# ErrorDocument 404 /contratos/index.php
+# ErrorDocument 403 /contratos/index.php

@@ -1,0 +1,178 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    INSTRUCCIONES DE INSTALACIÓN                             ║
+║            EXPORTACIÓN A EXCEL CON PHPSPREADSHEET                           ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📦 PASO 1: INSTALAR COMPOSER
+════════════════════════════════════════════════════════════════════════════
+
+Composer es un gestor de dependencias para PHP que necesitamos para instalar
+PhpSpreadsheet.
+
+1. Descarga Composer desde: https://getcomposer.org/download/
+
+2. Para Windows:
+   - Descarga el instalador: Composer-Setup.exe
+   - Ejecuta el instalador y sigue las instrucciones
+   - Selecciona la ruta de tu php.exe (generalmente: C:\xampp\php\php.exe)
+
+3. Verifica la instalación:
+   - Abre PowerShell o CMD
+   - Ejecuta: composer --version
+   - Deberías ver algo como: Composer version 2.x.x
+
+
+📚 PASO 2: INSTALAR PHPSPREADSHEET
+════════════════════════════════════════════════════════════════════════════
+
+1. Abre PowerShell o CMD como Administrador
+
+2. Navega a la carpeta del proyecto:
+   cd C:\xampp\htdocs\contratos
+
+3. Instala PhpSpreadsheet con Composer:
+   composer install
+
+   NOTA: Si es la primera vez, Composer descargará las dependencias.
+   Esto puede tardar unos minutos dependiendo de tu conexión.
+
+4. Verifica que se creó la carpeta "vendor" en tu proyecto:
+   C:\xampp\htdocs\contratos\vendor\
+
+
+⚙️ PASO 3: VERIFICAR EXTENSIONES PHP
+════════════════════════════════════════════════════════════════════════════
+
+PhpSpreadsheet requiere algunas extensiones de PHP habilitadas:
+
+1. Abre el archivo: C:\xampp\php\php.ini
+
+2. Busca y asegúrate de que estas líneas NO tengan ";" al inicio:
+   extension=zip
+   extension=gd
+   extension=xml
+   extension=xmlwriter
+   extension=xmlreader
+
+3. Si alguna tiene ";", quítalo para habilitarla
+
+4. Reinicia Apache desde el panel de control de XAMPP
+
+
+✅ PASO 4: PROBAR LA EXPORTACIÓN
+════════════════════════════════════════════════════════════════════════════
+
+1. Inicia sesión en el sistema: http://localhost/contratos/
+
+2. Ve a "Listar Contratos"
+
+3. Haz clic en el botón "Exportar a Excel"
+
+4. Deberías descargar un archivo .xlsx con:
+   ✓ Título del reporte con estilo
+   ✓ 40 columnas de datos
+   ✓ Encabezados con colores
+   ✓ Filas alternas con fondo gris
+   ✓ Bordes en todas las celdas
+   ✓ Filtros automáticos
+   ✓ Columnas auto-ajustadas
+   ✓ Total de registros al final
+
+
+🎨 CARACTERÍSTICAS DEL ARCHIVO EXCEL
+════════════════════════════════════════════════════════════════════════════
+
+📊 Datos incluidos (40 columnas):
+   • Información Personal (10 campos)
+   • Datos de Contacto (3 campos)
+   • Información Social (6 campos)
+   • Datos Académicos (6 campos)
+   • Información Laboral (9 campos)
+   • Datos de Auditoría (4 campos)
+
+🎨 Estilos aplicados:
+   • Título: Fondo azul (#2E86AB), texto blanco, centrado
+   • Encabezados: Fondo verde (#0C7C59), texto blanco, negrita
+   • Filas alternas: Fondo gris claro (#F0F0F0)
+   • Bordes: Todas las celdas con bordes delgados
+   • Total: Fondo azul con texto blanco y negrita
+
+🔧 Funcionalidades:
+   • Paneles congelados (título y encabezados siempre visibles)
+   • Filtros automáticos en todas las columnas
+   • Anchos de columna ajustados automáticamente
+   • Formato de fechas: DD/MM/YYYY
+   • Valores Sí/No en lugar de 1/0
+
+
+🔧 SOLUCIÓN DE PROBLEMAS
+════════════════════════════════════════════════════════════════════════════
+
+❌ Error: "Class 'PhpOffice\PhpSpreadsheet\Spreadsheet' not found"
+   ➜ Ejecuta: composer install
+   ➜ Verifica que existe: C:\xampp\htdocs\contratos\vendor\autoload.php
+
+❌ Error: "Call to undefined function mb_string..."
+   ➜ Habilita extension=mbstring en php.ini
+   ➜ Reinicia Apache
+
+❌ Error: "ZipArchive not found"
+   ➜ Habilita extension=zip en php.ini
+   ➜ Reinicia Apache
+
+❌ El archivo se descarga pero está corrupto
+   ➜ Verifica que no haya ningún echo o var_dump antes del header
+   ➜ Revisa que no haya espacios en blanco al inicio de los archivos PHP
+
+❌ Composer no se reconoce como comando
+   ➜ Cierra y vuelve a abrir PowerShell/CMD
+   ➜ Verifica la instalación: composer --version
+   ➜ Agrega Composer al PATH manualmente si es necesario
+
+
+📁 ESTRUCTURA DE ARCHIVOS
+════════════════════════════════════════════════════════════════════════════
+
+C:\xampp\htdocs\contratos\
+├── composer.json              ← Configuración de dependencias
+├── composer.lock              ← (Se crea automáticamente)
+├── vendor\                    ← (Se crea automáticamente)
+│   ├── autoload.php          ← Cargador automático
+│   ├── phpoffice\            ← Librería PhpSpreadsheet
+│   └── ...
+├── controllers\
+│   ├── exportar_controller.php  ← Controlador de exportación
+│   └── ...
+└── views\
+    ├── contrato_listar.php    ← Vista con botón de exportar
+    └── ...
+
+
+💡 COMANDOS ÚTILES DE COMPOSER
+════════════════════════════════════════════════════════════════════════════
+
+composer install        → Instalar dependencias desde composer.json
+composer update         → Actualizar todas las dependencias
+composer require <pkg>  → Instalar una nueva dependencia
+composer show           → Ver todas las dependencias instaladas
+composer dump-autoload  → Regenerar el autoloader
+
+
+🆘 SOPORTE ADICIONAL
+════════════════════════════════════════════════════════════════════════════
+
+📖 Documentación PhpSpreadsheet:
+   https://phpspreadsheet.readthedocs.io/
+
+📖 Documentación Composer:
+   https://getcomposer.org/doc/
+
+📧 Si tienes problemas, verifica:
+   1. Versión de PHP: php -v (debe ser >= 7.4)
+   2. Extensiones PHP: php -m
+   3. Logs de Apache: C:\xampp\apache\logs\error.log
+
+
+════════════════════════════════════════════════════════════════════════════
+                    ¡LISTO PARA EXPORTAR! 🎉
+════════════════════════════════════════════════════════════════════════════
