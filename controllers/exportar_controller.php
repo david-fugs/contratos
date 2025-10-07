@@ -5,8 +5,8 @@ require_once __DIR__ . '/../conexion.php';
 
 // Verificar que el usuario esté autenticado
 if (!isset($_SESSION['usuario_id'])) {
-    header('Location: ../index.php');
-    exit();
+    // Usar la función redirigir del config que ya maneja la URL correctamente
+    redirigir('index.php');
 }
 
 // Incluir PhpSpreadsheet

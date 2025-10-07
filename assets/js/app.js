@@ -4,7 +4,8 @@
  */
 
 // ===== VARIABLES GLOBALES =====
-const siteUrl = 'http://localhost/contratos/';
+// Obtener la URL base del sitio de forma dinámica
+const siteUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/')) + '/';
 
 // ===== FUNCIONES DE UTILIDAD =====
 

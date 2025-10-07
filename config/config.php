@@ -11,9 +11,19 @@ if (session_status() === PHP_SESSION_NONE) {
 // Incluir conexión
 require_once __DIR__ . '/../conexion.php';
 
+// Detectar URL base del sitio automáticamente
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+$host = $_SERVER['HTTP_HOST'];
+$scriptPath = str_replace('\\', '/', dirname(dirname($_SERVER['SCRIPT_NAME'])));
+$baseUrl = $protocol . $host . $scriptPath;
+// Asegurar que termine con /
+if (substr($baseUrl, -1) !== '/') {
+    $baseUrl .= '/';
+}
+
 // Constantes del sistema
 define('SITE_NAME', 'Sistema de Gestión de Contratos');
-define('SITE_URL', 'http://localhost/contratos/');
+define('SITE_URL', $baseUrl);
 define('UPLOAD_DIR', __DIR__ . '/../uploads/documentos/');
 define('UPLOAD_URL', SITE_URL . 'uploads/documentos/');
 

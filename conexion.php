@@ -6,9 +6,9 @@
 
 // Configuración de la base de datos
 define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'contratos');
+define('DB_USER', 'softepuc_contratagober');
+define('DB_PASS', 'ULykn#+3vH5Z');
+define('DB_NAME', 'softepuc_contratagober');
 
 // Crear conexión
 $mysqli = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
