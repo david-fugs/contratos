@@ -491,7 +491,30 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     </div>
 
-    <!-- SECCIÓN 6: TRATAMIENTO DE DATOS -->
+    <!-- SECCIÓN 6: ASIGNACIÓN DE ABOGADO -->
+    <div class="form-section">
+        <div class="form-section-title">
+            <i class="fas fa-user-tie"></i> Asignación de Abogado
+        </div>
+
+        <div class="form-group">
+            <label for="abogado_asignado" class="form-label">Abogado Asignado (Opcional)</label>
+            <select id="abogado_asignado" name="abogado_asignado" class="form-control form-select">
+                <option value="">Sin asignar</option>
+                <?php
+                // Obtener abogados
+                $query_abogados = "SELECT id, nombre FROM usuarios WHERE tipo_usuario = 'abogado' AND estado = 'activo' ORDER BY nombre";
+                $result_abogados = $mysqli->query($query_abogados);
+                while($abogado = $result_abogados->fetch_assoc()):
+                ?>
+                    <option value="<?php echo $abogado['id']; ?>"><?php echo htmlspecialchars($abogado['nombre']); ?></option>
+                <?php endwhile; ?>
+            </select>
+            <small class="form-text">Si asigna un abogado, se comenzará a contar el tiempo desde el momento de asignación.</small>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 7: TRATAMIENTO DE DATOS -->
     <div class="form-section">
         <div class="form-section-title">
             <i class="fas fa-shield-alt"></i> Tratamiento de Datos Personales
@@ -515,7 +538,7 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     </div>
 
-    <!-- SECCIÓN 7: CARGA DE DOCUMENTOS -->
+    <!-- SECCIÓN 8: CARGA DE DOCUMENTOS -->
     <div class="form-section">
         <div class="form-section-title">
             <i class="fas fa-file-upload"></i> Carga de Documentos

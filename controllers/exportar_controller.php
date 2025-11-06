@@ -22,9 +22,11 @@ use PhpOffice\PhpSpreadsheet\Style\Font;
 try {
     // Obtener todos los contratos con información completa
     $query = "SELECT c.*, 
-              u.nombre as creado_por
+              u.nombre as creado_por,
+              a.nombre as abogado_asignado
               FROM contratos c
               LEFT JOIN usuarios u ON c.usuario_creacion = u.id
+              LEFT JOIN usuarios a ON c.abogado_asignado = a.id
               WHERE c.estado = 'activo'
               ORDER BY c.fecha_creacion DESC";
     
@@ -52,7 +54,7 @@ try {
     
     // Título del documento
     $sheet->setCellValue('A1', 'REPORTE DE CONTRATOS - SECRETARÍA DE EDUCACIÓN RISARALDA');
-    $sheet->mergeCells('A1:AL1');
+    $sheet->mergeCells('A1:AM1');
     
     // Estilo del título
     $sheet->getStyle('A1')->applyFromArray([
@@ -74,7 +76,7 @@ try {
     
     // Fecha de generación
     $sheet->setCellValue('A2', 'Fecha de generación: ' . date('d/m/Y H:i:s'));
-    $sheet->mergeCells('A2:AL2');
+    $sheet->mergeCells('A2:AM2');
     $sheet->getStyle('A2')->applyFromArray([
         'font' => ['italic' => true, 'size' => 10],
         'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
@@ -119,7 +121,8 @@ try {
         'AI4' => 'Estado',
         'AJ4' => 'Creado Por',
         'AK4' => 'Fecha Creación',
-        'AL4' => 'Fecha Actualización'
+        'AL4' => 'Fecha Actualización',
+        'AM4' => 'Abogado asignado'
     ];
     
     // Establecer encabezados
@@ -128,7 +131,7 @@ try {
     }
     
     // Estilo de encabezados
-    $sheet->getStyle('A4:AL4')->applyFromArray([
+    $sheet->getStyle('A4:AM4')->applyFromArray([
         'font' => [
             'bold' => true,
             'color' => ['rgb' => 'FFFFFF'],
@@ -192,7 +195,9 @@ try {
         $sheet->setCellValue('AI' . $fila, $contrato['estado'] == 'activo' ? 'Activo' : 'Inactivo');
         $sheet->setCellValue('AJ' . $fila, $contrato['creado_por'] ?? '');
         $sheet->setCellValue('AK' . $fila, formatearFecha($contrato['fecha_creacion']));
-        $sheet->setCellValue('AL' . $fila, formatearFecha($contrato['fecha_actualizacion']));
+    $sheet->setCellValue('AL' . $fila, formatearFecha($contrato['fecha_actualizacion']));
+    // Nombre del abogado asignado (columna AM)
+    $sheet->setCellValue('AM' . $fila, $contrato['abogado_asignado'] ?? '');
         
         // Estilo de filas alternas
         if ($fila % 2 == 0) {
@@ -209,7 +214,7 @@ try {
     
     // Aplicar bordes a todas las celdas con datos
     $ultimaFila = $fila - 1;
-    $sheet->getStyle('A4:AL' . $ultimaFila)->applyFromArray([
+    $sheet->getStyle('A4:AM' . $ultimaFila)->applyFromArray([
         'borders' => [
             'allBorders' => [
                 'borderStyle' => Border::BORDER_THIN,
@@ -225,7 +230,7 @@ try {
     foreach (range('A', 'Z') as $col) {
         $sheet->getColumnDimension($col)->setAutoSize(true);
     }
-    foreach (['AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL'] as $col) {
+    foreach (['AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL', 'AM'] as $col) {
         $sheet->getColumnDimension($col)->setAutoSize(true);
     }
     
@@ -233,12 +238,12 @@ try {
     $sheet->freezePane('A5');
     
     // Agregar filtros automáticos
-    $sheet->setAutoFilter('A4:AL' . $ultimaFila);
+    $sheet->setAutoFilter('A4:AM' . $ultimaFila);
     
     // Total de registros
     $fila++;
     $sheet->setCellValue('A' . $fila, 'TOTAL DE REGISTROS: ' . count($contratos));
-    $sheet->mergeCells('A' . $fila . ':AL' . $fila);
+    $sheet->mergeCells('A' . $fila . ':AM' . $fila);
     $sheet->getStyle('A' . $fila)->applyFromArray([
         'font' => [
             'bold' => true,

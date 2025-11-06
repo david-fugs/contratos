@@ -51,6 +51,10 @@ function esAdministrador() {
     return isset($_SESSION['tipo_usuario']) && $_SESSION['tipo_usuario'] === 'administrador';
 }
 
+function esAbogado() {
+    return isset($_SESSION['tipo_usuario']) && $_SESSION['tipo_usuario'] === 'abogado';
+}
+
 function obtenerUsuarioActual() {
     return [
         'id' => $_SESSION['usuario_id'] ?? null,

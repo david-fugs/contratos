@@ -7,24 +7,27 @@ require_once __DIR__ . '/../config/config.php';
 verificarSesion();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_FILES) && count($_FILES) > 0) {
-        // Es una creación o actualización con archivos
-        $action = $_POST['action'] ?? 'crear';
-        
-        if ($action === 'crear' || !isset($_POST['action'])) {
+    $action = $_POST['action'] ?? '';
+    
+    // Si hay archivos y la acción es crear o editar
+    if ((isset($_FILES['archivo_documento']) && count($_FILES['archivo_documento']['name']) > 0) || $action === 'crear' || $action === 'editar') {
+        if ($action === 'editar') {
+            editarContrato();
+        } elseif ($action === 'crear' || !isset($_POST['action'])) {
             crearContrato();
         } elseif ($action === 'actualizar_documentos') {
             actualizarDocumentos();
         }
     } else {
-        $action = $_POST['action'] ?? '';
-        
         switch ($action) {
-            case 'editar':
-                editarContrato();
-                break;
             case 'eliminar':
                 eliminarContrato();
+                break;
+            case 'aprobar':
+                aprobarContrato();
+                break;
+            case 'actualizar_documento':
+                actualizarEstadoDocumento();
                 break;
             default:
                 generarRespuestaJSON(false, 'Acción no válida');
@@ -97,6 +100,10 @@ function crearContrato() {
     $aceptacion_datos = 'si';
     $usuario_creacion = $_SESSION['usuario_id'];
     
+    // Nuevo: Abogado asignado y fecha de asignación
+    $abogado_asignado = !empty($_POST['abogado_asignado']) ? intval($_POST['abogado_asignado']) : null;
+    $fecha_asignacion = $abogado_asignado ? date('Y-m-d H:i:s') : null;
+    
     // Insertar contrato
     $sql = "INSERT INTO contratos (
         fecha_diligenciamiento, correo_electronico, tipo_documento, numero_documento, lugar_expedicion,
@@ -105,12 +112,13 @@ function crearContrato() {
         tiene_hijos_menores, cuantos_hijos_menores, padre_madre_soltero, direccion_residencia,
         barrio, municipio_residencia, nivel_estudio, formacion_tecnica, formacion_tecnologica,
         formacion_pregrado, formacion_posgrado, datos_posgrado, maestria, posee_doctorado,
-        eps_afiliado, fondo_pension, arl, trabajo_municipio, aceptacion_datos, usuario_creacion
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        eps_afiliado, fondo_pension, arl, trabajo_municipio, aceptacion_datos, usuario_creacion,
+        abogado_asignado, fecha_asignacion
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     
     $stmt = $mysqli->prepare($sql);
     $stmt->bind_param(
-        "sssssssssssssississssssssssssssssi",
+        "sssssssssssssisssssssssssssssssssiis",
         $fecha_diligenciamiento, $correo_electronico, $tipo_documento, $numero_documento,
         $lugar_expedicion, $nombre_completo, $fecha_nacimiento, $identidad_genero,
         $grupo_poblacional, $posee_discapacidad, $especifique_discapacidad, $celular_contacto,
@@ -118,7 +126,8 @@ function crearContrato() {
         $padre_madre_soltero, $direccion_residencia, $barrio, $municipio_residencia,
         $nivel_estudio, $formacion_tecnica, $formacion_tecnologica, $formacion_pregrado,
         $formacion_posgrado, $datos_posgrado, $maestria, $posee_doctorado, $eps_afiliado,
-        $fondo_pension, $arl, $trabajo_municipio, $aceptacion_datos, $usuario_creacion
+        $fondo_pension, $arl, $trabajo_municipio, $aceptacion_datos, $usuario_creacion,
+        $abogado_asignado, $fecha_asignacion
     );
     
     if ($stmt->execute()) {
@@ -234,13 +243,255 @@ function obtenerDocumentos() {
 function editarContrato() {
     global $mysqli;
     
+    $contrato_id = intval($_POST['contrato_id'] ?? 0);
+    
+    if ($contrato_id <= 0) {
+        generarRespuestaJSON(false, 'ID de contrato inválido');
+        return;
+    }
+    
+    // Iniciar transacción
+    $mysqli->begin_transaction();
+    
+    try {
+        // Procesar municipios de trabajo
+        $trabajo_municipio = isset($_POST['trabajo_municipio']) ? implode(',', $_POST['trabajo_municipio']) : '';
+        
+        // Preparar todos los datos del formulario
+        $fecha_diligenciamiento = $_POST['fecha_diligenciamiento'] ?? date('Y-m-d');
+        $correo_electronico = sanitizar($_POST['correo_electronico'] ?? '');
+        $tipo_documento = sanitizar($_POST['tipo_documento'] ?? '');
+        $numero_documento = sanitizar($_POST['numero_documento'] ?? '');
+        $lugar_expedicion = sanitizar($_POST['lugar_expedicion'] ?? '');
+        $nombre_completo = sanitizar($_POST['nombre_completo'] ?? '');
+        $fecha_nacimiento = $_POST['fecha_nacimiento'] ?? '';
+        $identidad_genero = sanitizar($_POST['identidad_genero'] ?? '');
+        $grupo_poblacional = sanitizar($_POST['grupo_poblacional'] ?? '');
+        $posee_discapacidad = sanitizar($_POST['posee_discapacidad'] ?? '');
+        $especifique_discapacidad = $posee_discapacidad === 'si' ? sanitizar($_POST['especifique_discapacidad'] ?? '') : null;
+        $celular_contacto = sanitizar($_POST['celular_contacto'] ?? '');
+        $estado_civil = sanitizar($_POST['estado_civil'] ?? '');
+        $numero_hijos_dependientes = intval($_POST['numero_hijos_dependientes'] ?? 0);
+        $tiene_hijos_menores = sanitizar($_POST['tiene_hijos_menores'] ?? '');
+        $cuantos_hijos_menores = $tiene_hijos_menores === 'si' ? intval($_POST['cuantos_hijos_menores'] ?? 0) : null;
+        $padre_madre_soltero = sanitizar($_POST['padre_madre_soltero'] ?? '');
+        $direccion_residencia = sanitizar($_POST['direccion_residencia'] ?? '');
+        $barrio = sanitizar($_POST['barrio'] ?? '');
+        $municipio_residencia = sanitizar($_POST['municipio_residencia'] ?? '');
+        $nivel_estudio = sanitizar($_POST['nivel_estudio'] ?? '');
+        $formacion_tecnica = $nivel_estudio === 'tecnico' ? sanitizar($_POST['formacion_tecnica'] ?? '') : null;
+        $formacion_tecnologica = $nivel_estudio === 'tecnologo' ? sanitizar($_POST['formacion_tecnologica'] ?? '') : null;
+        $formacion_pregrado = $nivel_estudio === 'profesional' ? sanitizar($_POST['formacion_pregrado'] ?? '') : null;
+        $formacion_posgrado = $nivel_estudio === 'posgrado' ? sanitizar($_POST['formacion_posgrado'] ?? '') : null;
+        $datos_posgrado = $nivel_estudio === 'posgrado' ? sanitizar($_POST['datos_posgrado'] ?? '') : null;
+        $maestria = ($nivel_estudio === 'posgrado' && $datos_posgrado === 'maestria') ? sanitizar($_POST['maestria'] ?? '') : null;
+        $posee_doctorado = ($nivel_estudio === 'posgrado' && $datos_posgrado === 'doctorado') ? sanitizar($_POST['posee_doctorado'] ?? '') : null;
+        $eps_afiliado = sanitizar($_POST['eps_afiliado'] ?? '');
+        $fondo_pension = sanitizar($_POST['fondo_pension'] ?? '');
+        $arl = sanitizar($_POST['arl'] ?? '');
+        $aceptacion_datos = 'si';
+        
+        // Abogado asignado
+        $abogado_asignado_nuevo = !empty($_POST['abogado_asignado']) ? intval($_POST['abogado_asignado']) : null;
+        
+        // Verificar si hay que actualizar la fecha de asignación
+        $stmt_check = $mysqli->prepare("SELECT abogado_asignado FROM contratos WHERE id = ?");
+        $stmt_check->bind_param("i", $contrato_id);
+        $stmt_check->execute();
+        $result_check = $stmt_check->get_result();
+        $contrato_actual = $result_check->fetch_assoc();
+        $stmt_check->close();
+        
+        $actualizar_fecha_asignacion = false;
+        if ($abogado_asignado_nuevo && ($contrato_actual['abogado_asignado'] != $abogado_asignado_nuevo)) {
+            $actualizar_fecha_asignacion = true;
+        }
+        
+        // Actualizar contrato con todos los campos
+        if ($actualizar_fecha_asignacion) {
+            $sql = "UPDATE contratos SET 
+                fecha_diligenciamiento = ?, correo_electronico = ?, tipo_documento = ?, numero_documento = ?,
+                lugar_expedicion = ?, nombre_completo = ?, fecha_nacimiento = ?, identidad_genero = ?,
+                grupo_poblacional = ?, posee_discapacidad = ?, especifique_discapacidad = ?, celular_contacto = ?,
+                estado_civil = ?, numero_hijos_dependientes = ?, tiene_hijos_menores = ?, cuantos_hijos_menores = ?,
+                padre_madre_soltero = ?, direccion_residencia = ?, barrio = ?, municipio_residencia = ?,
+                nivel_estudio = ?, formacion_tecnica = ?, formacion_tecnologica = ?, formacion_pregrado = ?,
+                formacion_posgrado = ?, datos_posgrado = ?, maestria = ?, posee_doctorado = ?,
+                eps_afiliado = ?, fondo_pension = ?, arl = ?, trabajo_municipio = ?, aceptacion_datos = ?,
+                abogado_asignado = ?, fecha_asignacion = NOW()
+                WHERE id = ?";
+            
+            $stmt = $mysqli->prepare($sql);
+            $stmt->bind_param("sssssssssssssississsssssssssssssii",
+                $fecha_diligenciamiento, $correo_electronico, $tipo_documento, $numero_documento,
+                $lugar_expedicion, $nombre_completo, $fecha_nacimiento, $identidad_genero,
+                $grupo_poblacional, $posee_discapacidad, $especifique_discapacidad, $celular_contacto,
+                $estado_civil, $numero_hijos_dependientes, $tiene_hijos_menores, $cuantos_hijos_menores,
+                $padre_madre_soltero, $direccion_residencia, $barrio, $municipio_residencia,
+                $nivel_estudio, $formacion_tecnica, $formacion_tecnologica, $formacion_pregrado,
+                $formacion_posgrado, $datos_posgrado, $maestria, $posee_doctorado,
+                $eps_afiliado, $fondo_pension, $arl, $trabajo_municipio, $aceptacion_datos,
+                $abogado_asignado_nuevo, $contrato_id
+            );
+        } else {
+            $sql = "UPDATE contratos SET 
+                fecha_diligenciamiento = ?, correo_electronico = ?, tipo_documento = ?, numero_documento = ?,
+                lugar_expedicion = ?, nombre_completo = ?, fecha_nacimiento = ?, identidad_genero = ?,
+                grupo_poblacional = ?, posee_discapacidad = ?, especifique_discapacidad = ?, celular_contacto = ?,
+                estado_civil = ?, numero_hijos_dependientes = ?, tiene_hijos_menores = ?, cuantos_hijos_menores = ?,
+                padre_madre_soltero = ?, direccion_residencia = ?, barrio = ?, municipio_residencia = ?,
+                nivel_estudio = ?, formacion_tecnica = ?, formacion_tecnologica = ?, formacion_pregrado = ?,
+                formacion_posgrado = ?, datos_posgrado = ?, maestria = ?, posee_doctorado = ?,
+                eps_afiliado = ?, fondo_pension = ?, arl = ?, trabajo_municipio = ?, aceptacion_datos = ?,
+                abogado_asignado = ?
+                WHERE id = ?";
+            
+            $stmt = $mysqli->prepare($sql);
+            $stmt->bind_param("sssssssssssssississssssssssssssssii",
+                $fecha_diligenciamiento, $correo_electronico, $tipo_documento, $numero_documento,
+                $lugar_expedicion, $nombre_completo, $fecha_nacimiento, $identidad_genero,
+                $grupo_poblacional, $posee_discapacidad, $especifique_discapacidad, $celular_contacto,
+                $estado_civil, $numero_hijos_dependientes, $tiene_hijos_menores, $cuantos_hijos_menores,
+                $padre_madre_soltero, $direccion_residencia, $barrio, $municipio_residencia,
+                $nivel_estudio, $formacion_tecnica, $formacion_tecnologica, $formacion_pregrado,
+                $formacion_posgrado, $datos_posgrado, $maestria, $posee_doctorado,
+                $eps_afiliado, $fondo_pension, $arl, $trabajo_municipio, $aceptacion_datos,
+                $abogado_asignado_nuevo, $contrato_id
+            );
+        }
+        
+        $stmt->execute();
+        $stmt->close();
+        
+        // Actualizar municipios de trabajo si existe la tabla trabajo_municipios
+        $result_table = $mysqli->query("SHOW TABLES LIKE 'trabajo_municipios'");
+        if ($result_table->num_rows > 0) {
+            $mysqli->query("DELETE FROM trabajo_municipios WHERE contrato_id = $contrato_id");
+            if (isset($_POST['trabajo_municipio']) && is_array($_POST['trabajo_municipio'])) {
+                $stmt_mun = $mysqli->prepare("INSERT INTO trabajo_municipios (contrato_id, municipio) VALUES (?, ?)");
+                foreach ($_POST['trabajo_municipio'] as $municipio) {
+                    $municipio = sanitizar($municipio);
+                    $stmt_mun->bind_param("is", $contrato_id, $municipio);
+                    $stmt_mun->execute();
+                }
+                $stmt_mun->close();
+            }
+        }
+        
+        // Procesar nuevos documentos si se cargaron
+        $archivos_subidos = 0;
+        foreach ($_FILES as $key => $file) {
+            if (strpos($key, 'archivo_') === 0 && $file['error'] === UPLOAD_ERR_OK) {
+                $index = str_replace('archivo_', '', $key);
+                $tipo_documento_archivo = sanitizar($_POST["tipo_documento_$index"] ?? '');
+                
+                if (!empty($tipo_documento_archivo)) {
+                    $resultado = subirArchivo($file, $numero_documento, $tipo_documento_archivo, $contrato_id);
+                    if ($resultado['success']) {
+                        $archivos_subidos++;
+                    }
+                }
+            }
+        }
+        
+        // Registrar auditoría
+        $stmt_audit = $mysqli->prepare("INSERT INTO auditoria (tabla, registro_id, accion, usuario_id, datos_nuevos) VALUES ('contratos', ?, 'editar', ?, ?)");
+        $datos_nuevos = json_encode(['numero_documento' => $numero_documento, 'nombre_completo' => $nombre_completo]);
+        $stmt_audit->bind_param("iis", $contrato_id, $_SESSION['usuario_id'], $datos_nuevos);
+        $stmt_audit->execute();
+        $stmt_audit->close();
+        
+        // Confirmar transacción
+        $mysqli->commit();
+        
+        $mensaje = "Contrato actualizado exitosamente";
+        if ($archivos_subidos > 0) {
+            $mensaje .= ". Documentos subidos: $archivos_subidos";
+        }
+        generarRespuestaJSON(true, $mensaje);
+        
+    } catch (Exception $e) {
+        $mysqli->rollback();
+        generarRespuestaJSON(false, 'Error al actualizar el contrato: ' . $e->getMessage());
+    }
+}
+
+function aprobarContrato() {
+    global $mysqli;
+    
     $id = intval($_POST['id'] ?? 0);
-    $trabajo_municipio = isset($_POST['trabajo_municipio']) ? implode(',', $_POST['trabajo_municipio']) : '';
     
-    // Similar a crearContrato pero con UPDATE
-    // (Por brevedad, esta función puede expandirse según necesidades específicas)
+    if ($id <= 0) {
+        generarRespuestaJSON(false, 'ID de contrato inválido');
+        return;
+    }
     
-    generarRespuestaJSON(true, 'Función de edición disponible - implementar según necesidades');
+    $sql = "UPDATE contratos SET 
+            estado_aprobacion = 'aprobado',
+            fecha_aprobacion = NOW(),
+            aprobado_por = ?
+            WHERE id = ?";
+    
+    $stmt = $mysqli->prepare($sql);
+    $stmt->bind_param("ii", $_SESSION['usuario_id'], $id);
+    
+    if ($stmt->execute()) {
+        // Registrar auditoría
+        $stmt_audit = $mysqli->prepare("INSERT INTO auditoria (tabla, registro_id, accion, usuario_id, datos_nuevos) VALUES ('contratos', ?, 'editar', ?, ?)");
+        $datos_nuevos = json_encode(['accion' => 'aprobacion', 'fecha' => date('Y-m-d H:i:s')]);
+        $stmt_audit->bind_param("iis", $id, $_SESSION['usuario_id'], $datos_nuevos);
+        $stmt_audit->execute();
+        $stmt_audit->close();
+        
+        generarRespuestaJSON(true, "Contrato aprobado exitosamente");
+    } else {
+        generarRespuestaJSON(false, 'Error al aprobar el contrato');
+    }
+    
+    $stmt->close();
+}
+
+function actualizarEstadoDocumento() {
+    global $mysqli;
+    
+    $documento_id = intval($_POST['documento_id'] ?? 0);
+    $estado = sanitizar($_POST['estado'] ?? '');
+    $comentario = sanitizar($_POST['comentario'] ?? '');
+    
+    if ($documento_id <= 0) {
+        generarRespuestaJSON(false, 'ID de documento inválido');
+        return;
+    }
+    
+    if (!in_array($estado, ['pendiente', 'aprobado', 'rechazado'])) {
+        generarRespuestaJSON(false, 'Estado no válido');
+        return;
+    }
+    
+    $sql = "UPDATE documentos SET 
+            estado_documento = ?,
+            comentario_revision = ?,
+            fecha_revision = NOW(),
+            revisado_por = ?
+            WHERE id = ?";
+    
+    $stmt = $mysqli->prepare($sql);
+    $stmt->bind_param("ssii", $estado, $comentario, $_SESSION['usuario_id'], $documento_id);
+    
+    if ($stmt->execute()) {
+        // Registrar auditoría
+        $stmt_audit = $mysqli->prepare("INSERT INTO auditoria (tabla, registro_id, accion, usuario_id, datos_nuevos) VALUES ('documentos', ?, 'editar', ?, ?)");
+        $datos_nuevos = json_encode(['accion' => 'revision', 'estado' => $estado, 'fecha' => date('Y-m-d H:i:s')]);
+        $stmt_audit->bind_param("iis", $documento_id, $_SESSION['usuario_id'], $datos_nuevos);
+        $stmt_audit->execute();
+        $stmt_audit->close();
+        
+        generarRespuestaJSON(true, "Documento actualizado exitosamente");
+    } else {
+        generarRespuestaJSON(false, 'Error al actualizar el documento');
+    }
+    
+    $stmt->close();
 }
 
 function actualizarDocumentos() {

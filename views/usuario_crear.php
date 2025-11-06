@@ -64,6 +64,7 @@ verificarAdmin();
                     <option value="">Seleccione...</option>
                     <option value="administrador">Administrador</option>
                     <option value="usuario">Usuario</option>
+                    <option value="abogado">Abogado</option>
                 </select>
             </div>
 
