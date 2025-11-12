@@ -62,6 +62,13 @@ $paginaActual = basename($_SERVER['PHP_SELF'], '.php');
                     </a>
                 </li>
 
+                <li>
+                    <a href="guia_documentacion.php" class="<?php echo $paginaActual === 'guia_documentacion' ? 'active' : ''; ?>">
+                        <i class="fas fa-book"></i>
+                        <span>Guía de Documentación</span>
+                    </a>
+                </li>
+
                 <li style="margin-top: 30px;">
                     <a href="../logout.php" style="color: #fca5a5;">
                         <i class="fas fa-sign-out-alt"></i>

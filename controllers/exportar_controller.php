@@ -40,7 +40,7 @@ try {
     while ($row = $result->fetch_assoc()) {
         $contratos[] = $row;
     }
-    
+       
     // Crear nuevo archivo Excel
     $spreadsheet = new Spreadsheet();
     $sheet = $spreadsheet->getActiveSheet();

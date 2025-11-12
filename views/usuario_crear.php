@@ -24,6 +24,18 @@ verificarAdmin();
                 </div>
 
                 <div class="form-group">
+                    <label for="cedula" class="form-label required">Cédula</label>
+                    <input type="text" 
+                           id="cedula" 
+                           name="cedula" 
+                           class="form-control" 
+                           placeholder="Ej: 1234567890"
+                           required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
                     <label for="usuario" class="form-label required">Usuario</label>
                     <input type="text" 
                            id="usuario" 
@@ -31,6 +43,16 @@ verificarAdmin();
                            class="form-control" 
                            placeholder="Ej: jperez"
                            required>
+                </div>
+
+                <div class="form-group">
+                    <label for="tipo_usuario" class="form-label required">Tipo de Usuario</label>
+                    <select id="tipo_usuario" name="tipo_usuario" class="form-control form-select" required>
+                        <option value="">Seleccione...</option>
+                        <option value="administrador">Administrador</option>
+                        <option value="usuario">Usuario</option>
+                        <option value="abogado">Abogado</option>
+                    </select>
                 </div>
             </div>
 
@@ -56,16 +78,6 @@ verificarAdmin();
                            required
                            minlength="6">
                 </div>
-            </div>
-
-            <div class="form-group">
-                <label for="tipo_usuario" class="form-label required">Tipo de Usuario</label>
-                <select id="tipo_usuario" name="tipo_usuario" class="form-control form-select" required>
-                    <option value="">Seleccione...</option>
-                    <option value="administrador">Administrador</option>
-                    <option value="usuario">Usuario</option>
-                    <option value="abogado">Abogado</option>
-                </select>
             </div>
 
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 30px;">

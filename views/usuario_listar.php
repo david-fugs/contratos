@@ -14,9 +14,18 @@ $result = $mysqli->query($query);
 <div class="card">
     <div class="card-header">
         <h3><i class="fas fa-users"></i> Gestión de Usuarios</h3>
-        <a href="usuario_crear.php" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Nuevo Usuario
-        </a>
+        <div style="display: flex; gap: 10px;">
+            <a href="../controllers/documentacion_controller.php?action=descargar_plantilla&tipo=usuarios" 
+               class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Descargar Formato Excel
+            </a>
+            <button onclick="mostrarModalSubirExcel()" class="btn btn-info">
+                <i class="fas fa-file-upload"></i> Subir Archivo Excel
+            </button>
+            <a href="usuario_crear.php" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Nuevo Usuario
+            </a>
+        </div>
     </div>
     <div class="card-body">
         <!-- Filtros -->
@@ -50,6 +59,7 @@ $result = $mysqli->query($query);
                     <tr>
                         <th>ID</th>
                         <th>Nombre</th>
+                        <th>Cédula</th>
                         <th>Usuario</th>
                         <th>Tipo</th>
                         <th>Estado</th>
@@ -62,6 +72,7 @@ $result = $mysqli->query($query);
                     <tr data-tipo="<?php echo $usuario['tipo_usuario']; ?>" data-estado="<?php echo $usuario['estado']; ?>">
                         <td><?php echo $usuario['id']; ?></td>
                         <td><?php echo htmlspecialchars($usuario['nombre']); ?></td>
+                        <td><?php echo htmlspecialchars($usuario['cedula'] ?? 'N/A'); ?></td>
                         <td><?php echo htmlspecialchars($usuario['usuario']); ?></td>
                         <td>
                             <span class="badge badge-<?php echo $usuario['tipo_usuario'] === 'administrador' ? 'primary' : 'info'; ?>">
@@ -111,6 +122,11 @@ $result = $mysqli->query($query);
                 <div class="form-group">
                     <label for="edit_nombre" class="form-label required">Nombre Completo</label>
                     <input type="text" id="edit_nombre" name="nombre" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_cedula" class="form-label required">Cédula</label>
+                    <input type="text" id="edit_cedula" name="cedula" class="form-control" required>
                 </div>
 
                 <div class="form-group">
@@ -208,6 +224,7 @@ function editarUsuario(id) {
             if (data.success) {
                 document.getElementById('edit_id').value = data.data.id;
                 document.getElementById('edit_nombre').value = data.data.nombre;
+                document.getElementById('edit_cedula').value = data.data.cedula || '';
                 document.getElementById('edit_usuario').value = data.data.usuario;
                 document.getElementById('edit_tipo_usuario').value = data.data.tipo_usuario;
                 document.getElementById('edit_estado').value = data.data.estado;
@@ -272,6 +289,67 @@ function eliminarUsuario(id, nombre) {
                 } else {
                     Swal.fire('Error', data.message, 'error');
                 }
+            });
+        }
+    });
+}
+
+function mostrarModalSubirExcel() {
+    Swal.fire({
+        title: 'Subir Archivo Excel de Usuarios',
+        html: `
+            <div style="text-align: left; margin-bottom: 15px;">
+                <p style="margin-bottom: 10px;">Seleccione el archivo Excel con los datos de los usuarios.</p>
+                <p style="font-size: 13px; color: #6b7280;">
+                    <strong>Columnas requeridas:</strong><br>
+                    - NOMBRE COMPLETO<br>
+                    - CEDULA<br>
+                    - USUARIO<br>
+                    - TIPO USUARIO (administrador o abogado)
+                </p>
+            </div>
+            <input type="file" id="archivoExcel" accept=".xlsx,.xls" class="swal2-input" style="width: 90%;">
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Subir',
+        cancelButtonText: 'Cancelar',
+        showLoaderOnConfirm: true,
+        preConfirm: () => {
+            const archivo = document.getElementById('archivoExcel').files[0];
+            if (!archivo) {
+                Swal.showValidationMessage('Por favor seleccione un archivo');
+                return false;
+            }
+            
+            const formData = new FormData();
+            formData.append('archivo', archivo);
+            formData.append('action', 'importar_excel');
+            
+            return fetch('../controllers/usuario_controller.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.message);
+                }
+                return data;
+            })
+            .catch(error => {
+                Swal.showValidationMessage(`Error: ${error.message}`);
+            });
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Éxito!',
+                html: result.value.message,
+                confirmButtonText: 'Aceptar'
+            }).then(() => {
+                location.reload();
             });
         }
     });
