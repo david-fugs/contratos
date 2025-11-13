@@ -2,7 +2,7 @@
 $pageTitle = 'Listar Contratos';
 require_once __DIR__ . '/../includes/header.php';
 
-// Obtener contratos
+// Obtener contratos con información de workflow
 $query = "SELECT c.*, u.nombre as nombre_usuario_creacion,
           a.nombre as nombre_abogado_asignado,
           (SELECT COUNT(*) FROM documentos WHERE contrato_id = c.id) as total_documentos,
@@ -10,7 +10,22 @@ $query = "SELECT c.*, u.nombre as nombre_usuario_creacion,
               WHEN c.fecha_asignacion IS NULL THEN NULL
               WHEN c.fecha_aprobacion IS NOT NULL THEN DATEDIFF(c.fecha_aprobacion, c.fecha_asignacion)
               ELSE DATEDIFF(NOW(), c.fecha_asignacion)
-          END as dias_transcurridos
+          END as dias_transcurridos,
+          c.estado_workflow,
+          c.fecha_cambio_estado,
+          (SELECT u2.nombre FROM asignaciones_workflow aw
+           JOIN usuarios u2 ON aw.usuario_asignado = u2.id
+           WHERE aw.contrato_id = c.id AND aw.estado IN ('pendiente', 'en_proceso')
+           ORDER BY aw.fecha_asignacion DESC LIMIT 1) as usuario_asignado_actual,
+          (SELECT etapa FROM asignaciones_workflow 
+           WHERE contrato_id = c.id AND estado IN ('pendiente', 'en_proceso')
+           ORDER BY fecha_asignacion DESC LIMIT 1) as etapa_actual,
+          (SELECT fecha_asignacion FROM asignaciones_workflow 
+           WHERE contrato_id = c.id AND estado IN ('pendiente', 'en_proceso')
+           ORDER BY fecha_asignacion DESC LIMIT 1) as fecha_asignacion_actual,
+          (SELECT DATEDIFF(NOW(), fecha_asignacion) FROM asignaciones_workflow 
+           WHERE contrato_id = c.id AND estado IN ('pendiente', 'en_proceso')
+           ORDER BY fecha_asignacion DESC LIMIT 1) as dias_etapa_actual
           FROM contratos c
           LEFT JOIN usuarios u ON c.usuario_creacion = u.id
           LEFT JOIN usuarios a ON c.abogado_asignado = a.id
@@ -102,7 +117,21 @@ $result = $mysqli->query($query);
                         <td><?php echo ucwords(str_replace('_', ' ', $contrato['municipio_residencia'])); ?></td>
                         <td><?php echo formatearFecha($contrato['fecha_diligenciamiento']); ?></td>
                         <td>
-                            <?php if ($contrato['abogado_asignado']): ?>
+                            <?php if ($contrato['usuario_asignado_actual']): ?>
+                                <div style="margin-bottom: 5px;">
+                                    <span class="badge badge-info">
+                                        <?php echo htmlspecialchars($contrato['usuario_asignado_actual']); ?>
+                                    </span>
+                                </div>
+                                <small style="color: var(--gray-600); display: block;">
+                                    Etapa: <?php echo ucwords(str_replace('_', ' ', $contrato['etapa_actual'] ?? '')); ?>
+                                </small>
+                                <?php if ($contrato['dias_etapa_actual'] !== null): ?>
+                                <small style="color: var(--warning-color); display: block; font-weight: 600;">
+                                    <i class="fas fa-clock"></i> <?php echo $contrato['dias_etapa_actual']; ?> día(s)
+                                </small>
+                                <?php endif; ?>
+                            <?php elseif ($contrato['abogado_asignado']): ?>
                                 <span class="badge badge-info">
                                     <?php echo htmlspecialchars($contrato['nombre_abogado_asignado']); ?>
                                 </span>
@@ -122,12 +151,41 @@ $result = $mysqli->query($query);
                             <?php endif; ?>
                         </td>
                         <td>
+                            <?php 
+                            // Mostrar estado workflow si existe
+                            if (!empty($contrato['estado_workflow'])):
+                                $estados_colores = [
+                                    'en_creacion' => 'secondary',
+                                    'revision_documentos' => 'primary',
+                                    'administracion_tecnica' => 'info',
+                                    'revision_abogado' => 'warning',
+                                    'en_elaboracion' => 'info',
+                                    'para_firmas' => 'success',
+                                    'publicado_aprobado' => 'success',
+                                    'publicado_rechazado' => 'danger',
+                                    'publicado_corregido' => 'warning'
+                                ];
+                                $badge_class = $estados_colores[$contrato['estado_workflow']] ?? 'secondary';
+                            ?>
+                                <span class="badge badge-<?php echo $badge_class; ?>">
+                                    <?php echo ucwords(str_replace('_', ' ', $contrato['estado_workflow'])); ?>
+                                </span>
+                                <?php if ($contrato['fecha_cambio_estado']): ?>
+                                <br><small style="color: var(--gray-600); font-size: 11px;">
+                                    <?php echo formatearFecha($contrato['fecha_cambio_estado']); ?>
+                                </small>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                            
+                            <!-- Estado de aprobación original -->
                             <?php if ($contrato['estado_aprobacion'] === 'aprobado'): ?>
                                 <span class="badge badge-success">Aprobado</span>
                                 <br>
                                 <small style="color: var(--gray-600);">
                                     <?php echo formatearFecha($contrato['fecha_aprobacion']); ?>
                                 </small>
+                            <?php elseif ($contrato['estado_aprobacion'] === 'rechazado'): ?>
+                                <span class="badge badge-danger">Rechazado</span>
                             <?php else: ?>
                                 <span class="badge badge-warning">Pendiente</span>
                             <?php endif; ?>
@@ -143,6 +201,13 @@ $result = $mysqli->query($query);
                                     title="Ver Detalles">
                                 <i class="fas fa-eye"></i>
                             </button>
+                            <?php if (!in_array($contrato['estado_workflow'], ['publicado_aprobado', 'publicado_rechazado', 'publicado_corregido'])): ?>
+                            <button onclick="window.location.href='workflow_gestionar.php?id=<?php echo $contrato['id']; ?>'" 
+                                    class="btn btn-sm btn-success"
+                                    title="Gestionar Workflow">
+                                <i class="fas fa-tasks"></i>
+                            </button>
+                            <?php endif; ?>
                             <button onclick="window.location.href='contrato_editar.php?id=<?php echo $contrato['id']; ?>'" 
                                     class="btn btn-sm btn-primary"
                                     title="Editar">
@@ -194,16 +259,59 @@ $result = $mysqli->query($query);
 
 <!-- Modal Ver Documentos -->
 <div id="modalVerDocumentos" class="modal">
-    <div class="modal-content" style="max-width: 900px;">
+    <div class="modal-content" style="max-width: 1000px;">
         <div class="modal-header">
             <h3>Documentos del Contrato</h3>
             <button class="modal-close" onclick="ocultarModal('modalVerDocumentos')">&times;</button>
         </div>
         <div class="modal-body">
             <h4 id="nombreContratoDocumentos" style="margin-bottom: 20px;"></h4>
+            
+            <!-- Resumen de revisión -->
+            <?php if (esRevisorDocumentos() || esAdministrador()): ?>
+            <div id="resumenRevision" style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <!-- Se carga dinámicamente -->
+            </div>
+            <?php endif; ?>
+            
             <div id="listaDocumentos">
                 <!-- Contenido dinámico -->
             </div>
+            
+            <!-- Asignar Abogado (solo revisor de documentos) -->
+            <?php if (esRevisorDocumentos() || esAdministrador()): ?>
+            <div id="seccionAsignarAbogado" style="margin-top: 30px; padding: 20px; background: #f0f9ff; border-radius: 8px; display: none;">
+                <h5><i class="fas fa-user-tie"></i> Asignar a Revisión Legal (Abogado)</h5>
+                <p style="color: #64748b; font-size: 14px; margin-bottom: 15px;">
+                    Una vez revisados todos los documentos, puede asignar este contrato a un abogado para revisión legal.
+                </p>
+                <form id="formAsignarAbogadoRevisor">
+                    <input type="hidden" id="contratoIdAsignar" name="contrato_id">
+                    <input type="hidden" name="action" value="asignar_usuario">
+                    <input type="hidden" name="etapa" value="revision_abogado">
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2;">
+                            <label for="abogadoAsignado">Seleccionar Abogado</label>
+                            <select id="abogadoAsignado" name="usuario_asignado" class="form-control form-select" required>
+                                <option value="">Cargando abogados...</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>&nbsp;</label>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                <i class="fas fa-paper-plane"></i> Asignar Abogado
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="comentariosAsignacion">Comentarios (opcional)</label>
+                        <textarea id="comentariosAsignacion" name="comentarios" class="form-control" rows="2" 
+                                  placeholder="Instrucciones o notas para el abogado..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <?php endif; ?>
         </div>
         <div class="modal-footer">
             <button class="btn btn-light" onclick="ocultarModal('modalVerDocumentos')">Cerrar</button>
@@ -381,34 +489,62 @@ function verContrato(id) {
 function verDocumentos(contratoId, nombreCompleto) {
     document.getElementById('nombreContratoDocumentos').textContent = nombreCompleto;
     
+    <?php if (esRevisorDocumentos() || esAdministrador()): ?>
+    // Cargar abogados para asignación
+    fetch('../controllers/usuario_controller.php?action=listar_abogados')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('abogadoAsignado');
+                select.innerHTML = '<option value="">Seleccione un abogado...</option>';
+                data.data.forEach(abogado => {
+                    select.innerHTML += `<option value="${abogado.id}">${abogado.nombre}</option>`;
+                });
+            }
+        });
+    
+    // Guardar contrato ID para asignación
+    document.getElementById('contratoIdAsignar').value = contratoId;
+    <?php endif; ?>
+    
     fetch(`../controllers/contrato_controller.php?action=documentos&contrato_id=${contratoId}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 let html = '';
+                let totalDocs = data.data.length;
+                let aprobados = 0;
+                let rechazados = 0;
+                let pendientes = 0;
                 
-                if (data.data.length > 0) {
+                if (totalDocs > 0) {
                     data.data.forEach(doc => {
+                        // Determinar estado de revisión
+                        const estadoRevision = doc.estado_revision || 'pendiente';
+                        if (estadoRevision === 'aprobado') aprobados++;
+                        else if (estadoRevision === 'rechazado') rechazados++;
+                        else pendientes++;
+                        
                         const tipoNombre = doc.tipo_documento.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                        const estadoBadgeClass = doc.estado_documento === 'aprobado' ? 'estado-aprobado' : 
-                                                 doc.estado_documento === 'rechazado' ? 'estado-rechazado' : 'estado-pendiente';
-                        const estadoTexto = doc.estado_documento === 'aprobado' ? 'Aprobado' : 
-                                           doc.estado_documento === 'rechazado' ? 'Rechazado' : 'Pendiente';
+                        const estadoBadgeClass = estadoRevision === 'aprobado' ? 'badge-success' : 
+                                                 estadoRevision === 'rechazado' ? 'badge-danger' : 'badge-warning';
+                        const estadoTexto = estadoRevision === 'aprobado' ? 'Aprobado' : 
+                                           estadoRevision === 'rechazado' ? 'Rechazado' : 'Pendiente';
                         
                         html += `
                             <div class="file-item">
                                 <div class="file-item-header">
                                     <div>
                                         <h5 style="margin: 0 0 5px 0; font-size: 14px;">${tipoNombre}</h5>
-                                        <small style="color: var(--gray-500);">Subido: ${formatearFecha(doc.fecha_subida)}</small>
+                                        <small style="color: var(--gray-500);">Subido: ${formatearFecha(doc.fecha_carga || doc.fecha_subida)}</small>
                                     </div>
-                                    <span class="estado-badge ${estadoBadgeClass}">${estadoTexto}</span>
+                                    <span class="badge ${estadoBadgeClass}">${estadoTexto}</span>
                                 </div>
                                 
-                                ${doc.comentario_revision ? `
+                                ${doc.comentarios_revision ? `
                                     <div style="background-color: var(--gray-50); padding: 10px; border-radius: 4px; margin: 10px 0;">
                                         <strong style="font-size: 12px; color: var(--gray-600);">Comentario:</strong>
-                                        <p style="margin: 5px 0 0 0; font-size: 13px;">${doc.comentario_revision}</p>
+                                        <p style="margin: 5px 0 0 0; font-size: 13px;">${doc.comentarios_revision}</p>
                                         ${doc.fecha_revision ? `<small style="color: var(--gray-500);">Revisado: ${formatearFecha(doc.fecha_revision)}</small>` : ''}
                                     </div>
                                 ` : ''}
@@ -419,15 +555,15 @@ function verDocumentos(contratoId, nombreCompleto) {
                                        class="btn btn-sm btn-primary">
                                         <i class="fas fa-download"></i> Ver/Descargar
                                     </a>
-                                    <?php if (esAdministrador() || esAbogado()): ?>
+                                    <?php if (esRevisorDocumentos() || esAdministrador()): ?>
                                     <button onclick="revisarDocumento(${doc.id}, 'aprobado')" 
                                             class="btn btn-sm btn-success"
-                                            ${doc.estado_documento === 'aprobado' ? 'disabled' : ''}>
+                                            ${estadoRevision === 'aprobado' ? 'disabled' : ''}>
                                         <i class="fas fa-check"></i> Aprobar
                                     </button>
                                     <button onclick="revisarDocumento(${doc.id}, 'rechazado')" 
                                             class="btn btn-sm btn-danger"
-                                            ${doc.estado_documento === 'rechazado' ? 'disabled' : ''}>
+                                            ${estadoRevision === 'rechazado' ? 'disabled' : ''}>
                                         <i class="fas fa-times"></i> Rechazar
                                     </button>
                                     <?php endif; ?>
@@ -435,6 +571,39 @@ function verDocumentos(contratoId, nombreCompleto) {
                             </div>
                         `;
                     });
+                    
+                    <?php if (esRevisorDocumentos() || esAdministrador()): ?>
+                    // Mostrar resumen
+                    const porcentaje = totalDocs > 0 ? Math.round((aprobados / totalDocs) * 100) : 0;
+                    const todosRevisados = pendientes === 0;
+                    
+                    document.getElementById('resumenRevision').innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h5 style="margin: 0 0 10px 0;">Estado de Revisión</h5>
+                                <div style="display: flex; gap: 15px;">
+                                    <span><i class="fas fa-check-circle" style="color: #10b981;"></i> ${aprobados} Aprobados</span>
+                                    <span><i class="fas fa-times-circle" style="color: #ef4444;"></i> ${rechazados} Rechazados</span>
+                                    <span><i class="fas fa-clock" style="color: #f59e0b;"></i> ${pendientes} Pendientes</span>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 32px; font-weight: bold; color: ${todosRevisados ? '#10b981' : '#6b7280'};">
+                                    ${porcentaje}%
+                                </div>
+                                <small style="color: #6b7280;">Completado</small>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Mostrar sección de asignar abogado si todos están revisados
+                    if (todosRevisados && aprobados > 0) {
+                        document.getElementById('seccionAsignarAbogado').style.display = 'block';
+                    } else {
+                        document.getElementById('seccionAsignarAbogado').style.display = 'none';
+                    }
+                    <?php endif; ?>
+                    
                 } else {
                     html = '<p style="text-align: center; color: var(--gray-500); padding: 20px;">No hay documentos asociados</p>';
                 }
@@ -464,12 +633,12 @@ function revisarDocumento(documentoId, estado) {
     }).then((result) => {
         if (result.isConfirmed) {
             const formData = new FormData();
-            formData.append('action', 'actualizar_documento');
+            formData.append('action', 'revisar_documento');
             formData.append('documento_id', documentoId);
-            formData.append('estado', estado);
-            formData.append('comentario', result.value || '');
+            formData.append('estado_revision', estado);
+            formData.append('comentarios', result.value || '');
 
-            fetch(BASE_URL + '/controllers/contrato_controller.php', {
+            fetch('../controllers/revision_documentos_controller.php', {
                 method: 'POST',
                 body: formData
             })
@@ -477,11 +646,17 @@ function revisarDocumento(documentoId, estado) {
             .then(data => {
                 if (data.success) {
                     Swal.fire('¡Actualizado!', data.message, 'success').then(() => {
-                        location.reload();
+                        // Recargar los documentos en el modal sin cerrar
+                        const contratoId = document.getElementById('contratoIdAsignar').value;
+                        const nombreContrato = document.getElementById('nombreContratoDocumentos').textContent;
+                        verDocumentos(contratoId, nombreContrato);
                     });
                 } else {
                     Swal.fire('Error', data.message, 'error');
                 }
+            })
+            .catch(error => {
+                Swal.fire('Error', 'Ocurrió un error al revisar el documento', 'error');
             });
         }
     });
@@ -677,6 +852,51 @@ function eliminarContrato(id, nombre) {
         }
     });
 }
+
+// Manejar asignación de abogado desde revisor de documentos
+document.addEventListener('DOMContentLoaded', function() {
+    const formAsignar = document.getElementById('formAsignarAbogadoRevisor');
+    if (formAsignar) {
+        formAsignar.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const contratoId = document.getElementById('contratoIdAsignar').value;
+            const abogadoId = document.getElementById('abogadoAsignado').value;
+            const comentarios = document.getElementById('comentariosAsignacion').value;
+            
+            if (!abogadoId) {
+                Swal.fire('Error', 'Debe seleccionar un abogado', 'warning');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('action', 'asignar_usuario');
+            formData.append('contrato_id', contratoId);
+            formData.append('usuario_asignado', abogadoId);
+            formData.append('etapa', 'revision_abogado');
+            formData.append('comentarios', comentarios);
+            
+            fetch('../controllers/workflow_controller.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('¡Asignado!', 'El contrato ha sido asignado al abogado', 'success').then(() => {
+                        cerrarModal('modalVerDocumentos');
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            })
+            .catch(error => {
+                Swal.fire('Error', 'Ocurrió un error al asignar el abogado', 'error');
+            });
+        });
+    }
+});
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

@@ -50,9 +50,18 @@ verificarAdmin();
                     <select id="tipo_usuario" name="tipo_usuario" class="form-control form-select" required>
                         <option value="">Seleccione...</option>
                         <option value="administrador">Administrador</option>
-                        <option value="usuario">Usuario</option>
+                        <option value="usuario">Usuario (Creador de Contratos)</option>
                         <option value="abogado">Abogado</option>
+                        <option value="administrador_tecnico">Administrador Técnico</option>
+                        <option value="revisor_documentos">Revisor de Documentos</option>
                     </select>
+                    <small class="form-text text-muted">
+                        <strong>Administrador:</strong> Acceso completo al sistema.<br>
+                        <strong>Usuario:</strong> Puede crear y editar contratos.<br>
+                        <strong>Revisor Documentos:</strong> Revisa y aprueba/rechaza documentos.<br>
+                        <strong>Administrador Técnico:</strong> Gestiona CDP y datos técnicos.<br>
+                        <strong>Abogado:</strong> Revisión final y aprobación de contratos.
+                    </small>
                 </div>
             </div>
 

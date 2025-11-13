@@ -74,6 +74,7 @@ require_once __DIR__ . '/../includes/header.php';
 </style>
 
 <form id="formContrato" enctype="multipart/form-data">
+    <input type="hidden" name="action" value="crear">
     
     <!-- SECCIÓN 1: INFORMACIÓN BÁSICA -->
     <div class="form-section">

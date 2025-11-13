@@ -713,3 +713,13 @@ textarea.form-control {
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
+
+/* ===== SWEETALERT Z-INDEX ===== */
+/* Asegurar que SweetAlert aparezca sobre los modales */
+.swal2-container {
+    z-index: 20000 !important;
+}
+
+.swal-high-zindex {
+    z-index: 20000 !important;
+}

@@ -48,12 +48,14 @@ $paginaActual = basename($_SERVER['PHP_SELF'], '.php');
                 </li>
                 <?php endif; ?>
 
+                <?php if (esAdministrador() || $_SESSION['tipo_usuario'] === 'usuario'): ?>
                 <li>
                     <a href="contrato_crear.php" class="<?php echo $paginaActual === 'contrato_crear' ? 'active' : ''; ?>">
                         <i class="fas fa-file-signature"></i>
                         <span>Nuevo Contrato</span>
                     </a>
                 </li>
+                <?php endif; ?>
 
                 <li>
                     <a href="contrato_listar.php" class="<?php echo $paginaActual === 'contrato_listar' ? 'active' : ''; ?>">
@@ -61,6 +63,17 @@ $paginaActual = basename($_SERVER['PHP_SELF'], '.php');
                         <span>Listar Contratos</span>
                     </a>
                 </li>
+
+                <?php if (esAdministradorTecnico()): ?>
+                <li>
+                    <a href="cdp_gestionar.php" class="<?php echo $paginaActual === 'cdp_gestionar' ? 'active' : ''; ?>">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                        <span>Gestión CDP</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+
+
 
                 <li>
                     <a href="guia_documentacion.php" class="<?php echo $paginaActual === 'guia_documentacion' ? 'active' : ''; ?>">

@@ -55,6 +55,120 @@ function esAbogado() {
     return isset($_SESSION['tipo_usuario']) && $_SESSION['tipo_usuario'] === 'abogado';
 }
 
+function esAdministradorTecnico() {
+    return isset($_SESSION['tipo_usuario']) && $_SESSION['tipo_usuario'] === 'administrador_tecnico';
+}
+
+function esRevisorDocumentos() {
+    return isset($_SESSION['tipo_usuario']) && $_SESSION['tipo_usuario'] === 'revisor_documentos';
+}
+
+function tienePermiso($permiso) {
+    global $mysqli;
+    if (!isset($_SESSION['tipo_usuario'])) return false;
+    
+    $tipo_usuario = $_SESSION['tipo_usuario'];
+    
+    // Verificar si la tabla permisos_rol existe
+    $tabla_existe = $mysqli->query("SHOW TABLES LIKE 'permisos_rol'")->num_rows > 0;
+    
+    if (!$tabla_existe) {
+        // Si no existe la tabla, usar permisos básicos por rol
+        $permisos_basicos = [
+            'administrador' => ['crear_usuarios', 'editar_usuarios', 'eliminar_usuarios', 'crear_contratos', 'editar_contratos', 'eliminar_contratos', 'ver_todos_contratos', 'aprobar_contratos', 'asignar_usuarios'],
+            'usuario' => ['crear_contratos', 'editar_propios_contratos', 'ver_propios_contratos'],
+            'revisor_documentos' => ['ver_contratos_asignados', 'revisar_documentos', 'comentar_documentos', 'asignar_abogado'],
+            'administrador_tecnico' => ['ver_contratos_asignados', 'crear_cdp', 'editar_cdp', 'agregar_datos_tecnicos', 'asignar_abogado', 'ver_documentos'],
+            'abogado' => ['ver_contratos_asignados', 'aprobar_contratos', 'rechazar_contratos', 'devolver_contratos', 'cambiar_estado_contrato', 'ver_documentos']
+        ];
+        return isset($permisos_basicos[$tipo_usuario]) && in_array($permiso, $permisos_basicos[$tipo_usuario]);
+    }
+    
+    $stmt = $mysqli->prepare("SELECT COUNT(*) as tiene FROM permisos_rol WHERE tipo_usuario = ? AND permiso = ? AND activo = 1");
+    if (!$stmt) {
+        error_log("Error en prepare tienePermiso: " . $mysqli->error);
+        return false;
+    }
+    $stmt->bind_param("ss", $tipo_usuario, $permiso);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    return $result['tiene'] > 0;
+}
+
+function puedeVerContrato($contrato_id) {
+    global $mysqli;
+    if (!isset($_SESSION['usuario_id']) || !isset($_SESSION['tipo_usuario'])) return false;
+    
+    $usuario_id = $_SESSION['usuario_id'];
+    $tipo_usuario = $_SESSION['tipo_usuario'];
+    
+    // Administradores ven todo
+    if ($tipo_usuario === 'administrador') return true;
+    
+    // Usuarios ven solo los que crearon
+    if ($tipo_usuario === 'usuario') {
+        $stmt = $mysqli->prepare("SELECT COUNT(*) as puede FROM contratos WHERE id = ? AND usuario_creacion = ?");
+        if (!$stmt) {
+            error_log("Error en prepare puedeVerContrato usuario: " . $mysqli->error);
+            return false;
+        }
+        $stmt->bind_param("ii", $contrato_id, $usuario_id);
+        $stmt->execute();
+        $result = $stmt->get_result()->fetch_assoc();
+        return $result['puede'] > 0;
+    }
+    
+    // Abogados ven los asignados en el campo abogado_asignado
+    if ($tipo_usuario === 'abogado') {
+        $stmt = $mysqli->prepare("SELECT COUNT(*) as puede FROM contratos WHERE id = ? AND abogado_asignado = ?");
+        if (!$stmt) {
+            error_log("Error en prepare puedeVerContrato abogado: " . $mysqli->error);
+            return false;
+        }
+        $stmt->bind_param("ii", $contrato_id, $usuario_id);
+        $stmt->execute();
+        $result = $stmt->get_result()->fetch_assoc();
+        return $result['puede'] > 0;
+    }
+    
+    // Administrador técnico puede ver contratos en administracion_tecnica
+    if ($tipo_usuario === 'administrador_tecnico') {
+        $stmt = $mysqli->prepare("SELECT COUNT(*) as puede FROM contratos WHERE id = ? AND estado_workflow = 'administracion_tecnica'");
+        if (!$stmt) {
+            error_log("Error en prepare puedeVerContrato admin_tecnico: " . $mysqli->error);
+            return false;
+        }
+        $stmt->bind_param("i", $contrato_id);
+        $stmt->execute();
+        $result = $stmt->get_result()->fetch_assoc();
+        if ($result['puede'] > 0) return true;
+    }
+    
+    // Revisor de documentos y administrador técnico
+    // Verificar si la tabla asignaciones_workflow existe
+    $tabla_existe = $mysqli->query("SHOW TABLES LIKE 'asignaciones_workflow'")->num_rows > 0;
+    
+    if ($tabla_existe) {
+        // Si existe la tabla, verificar asignaciones
+        $stmt = $mysqli->prepare("
+            SELECT COUNT(*) as puede 
+            FROM asignaciones_workflow 
+            WHERE contrato_id = ? AND usuario_asignado = ? AND estado IN ('pendiente', 'en_proceso')
+        ");
+        if (!$stmt) {
+            error_log("Error en prepare puedeVerContrato workflow: " . $mysqli->error);
+            return false;
+        }
+        $stmt->bind_param("ii", $contrato_id, $usuario_id);
+        $stmt->execute();
+        $result = $stmt->get_result()->fetch_assoc();
+        return $result['puede'] > 0;
+    } else {
+        // Si no existe la tabla, permitir ver todos los contratos (modo de transición)
+        return true;
+    }
+}
+
 function obtenerUsuarioActual() {
     return [
         'id' => $_SESSION['usuario_id'] ?? null,

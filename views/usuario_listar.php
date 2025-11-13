@@ -37,10 +37,13 @@ $result = $mysqli->query($query);
                        placeholder="🔍 Buscar por nombre, usuario o tipo...">
             </div>
             <div>
-                <select id="filtroTipo" class="form-control form-select" style="min-width: 180px;">
+                <select id="filtroTipo" class="form-control form-select" style="min-width: 200px;">
                     <option value="">Todos los tipos</option>
                     <option value="administrador">Administrador</option>
                     <option value="usuario">Usuario</option>
+                    <option value="abogado">Abogado</option>
+                    <option value="revisor_documentos">Revisor Documentos</option>
+                    <option value="administrador_tecnico">Admin Técnico</option>
                 </select>
             </div>
             <div>
@@ -75,8 +78,29 @@ $result = $mysqli->query($query);
                         <td><?php echo htmlspecialchars($usuario['cedula'] ?? 'N/A'); ?></td>
                         <td><?php echo htmlspecialchars($usuario['usuario']); ?></td>
                         <td>
-                            <span class="badge badge-<?php echo $usuario['tipo_usuario'] === 'administrador' ? 'primary' : 'info'; ?>">
-                                <?php echo ucfirst($usuario['tipo_usuario']); ?>
+                            <?php 
+                            $badgeClass = 'badge-info';
+                            $tipoLabel = ucfirst(str_replace('_', ' ', $usuario['tipo_usuario']));
+                            
+                            switch($usuario['tipo_usuario']) {
+                                case 'administrador':
+                                    $badgeClass = 'badge-primary';
+                                    break;
+                                case 'abogado':
+                                    $badgeClass = 'badge-warning';
+                                    break;
+                                case 'revisor_documentos':
+                                    $badgeClass = 'badge-success';
+                                    $tipoLabel = 'Revisor Docs';
+                                    break;
+                                case 'administrador_tecnico':
+                                    $badgeClass = 'badge-secondary';
+                                    $tipoLabel = 'Admin Técnico';
+                                    break;
+                            }
+                            ?>
+                            <span class="badge <?php echo $badgeClass; ?>">
+                                <?php echo $tipoLabel; ?>
                             </span>
                         </td>
                         <td>
@@ -138,7 +162,10 @@ $result = $mysqli->query($query);
                     <label for="edit_tipo_usuario" class="form-label required">Tipo de Usuario</label>
                     <select id="edit_tipo_usuario" name="tipo_usuario" class="form-control form-select" required>
                         <option value="administrador">Administrador</option>
-                        <option value="usuario">Usuario</option>
+                        <option value="usuario">Usuario (Creador)</option>
+                        <option value="abogado">Abogado</option>
+                        <option value="revisor_documentos">Revisor de Documentos</option>
+                        <option value="administrador_tecnico">Administrador Técnico</option>
                     </select>
                 </div>
 

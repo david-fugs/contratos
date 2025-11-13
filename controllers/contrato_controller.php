@@ -9,29 +9,32 @@ verificarSesion();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
-    // Si hay archivos y la acción es crear o editar
-    if ((isset($_FILES['archivo_documento']) && count($_FILES['archivo_documento']['name']) > 0) || $action === 'crear' || $action === 'editar') {
-        if ($action === 'editar') {
-            editarContrato();
-        } elseif ($action === 'crear' || !isset($_POST['action'])) {
+    // Detectar si es creación de contrato (cuando viene del formulario principal)
+    if (empty($action) && isset($_POST['numero_documento']) && isset($_POST['nombre_completo'])) {
+        $action = 'crear';
+    }
+    
+    switch ($action) {
+        case 'crear':
             crearContrato();
-        } elseif ($action === 'actualizar_documentos') {
+            break;
+        case 'editar':
+            editarContrato();
+            break;
+        case 'eliminar':
+            eliminarContrato();
+            break;
+        case 'aprobar':
+            aprobarContrato();
+            break;
+        case 'actualizar_documento':
+            actualizarEstadoDocumento();
+            break;
+        case 'actualizar_documentos':
             actualizarDocumentos();
-        }
-    } else {
-        switch ($action) {
-            case 'eliminar':
-                eliminarContrato();
-                break;
-            case 'aprobar':
-                aprobarContrato();
-                break;
-            case 'actualizar_documento':
-                actualizarEstadoDocumento();
-                break;
-            default:
-                generarRespuestaJSON(false, 'Acción no válida');
-        }
+            break;
+        default:
+            generarRespuestaJSON(false, 'Acción no válida');
     }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $action = $_GET['action'] ?? '';
