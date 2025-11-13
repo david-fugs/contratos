@@ -100,59 +100,55 @@ function asignarUsuarioEtapa() {
         return;
     }
     
-    // Verificar si el procedimiento existe, si no usar INSERT directo
-    $proc_exists = $mysqli->query("SHOW PROCEDURE STATUS WHERE Name = 'asignar_usuario_etapa'")->num_rows > 0;
+    // Asignar usuario usando SQL directo (sin procedimiento almacenado)
+    // Iniciar transacción
+    $mysqli->begin_transaction();
     
-    if ($proc_exists) {
-        // Usar procedimiento almacenado para asignar
-        $stmt = $mysqli->prepare("CALL asignar_usuario_etapa(?, ?, ?, ?, ?)");
-        if (!$stmt) {
-            generarRespuestaJSON(false, 'Error al preparar procedimiento: ' . $mysqli->error);
-            return;
-        }
-        $stmt->bind_param("isiss", $contrato_id, $etapa, $usuario_asignado, $usuario_asigno, $comentarios);
-        
-        if ($stmt->execute()) {
-            generarRespuestaJSON(true, 'Usuario asignado exitosamente');
-        } else {
-            generarRespuestaJSON(false, 'Error al asignar usuario: ' . $mysqli->error);
-        }
-    } else {
-        // Método alternativo sin procedimiento almacenado
+    try {
         // 1. Finalizar asignaciones anteriores
-        $mysqli->query("UPDATE asignaciones_workflow 
-                       SET estado = 'completado', fecha_finalizacion = NOW()
-                       WHERE contrato_id = $contrato_id 
-                       AND etapa = '$etapa' 
-                       AND estado IN ('pendiente', 'en_proceso')");
+        $stmt = $mysqli->prepare("UPDATE asignaciones_workflow 
+                                  SET estado = 'completado', fecha_finalizacion = NOW()
+                                  WHERE contrato_id = ? 
+                                  AND etapa = ? 
+                                  AND estado IN ('pendiente', 'en_proceso')");
+        $stmt->bind_param("is", $contrato_id, $etapa);
+        $stmt->execute();
         
         // 2. Crear nueva asignación
         $stmt = $mysqli->prepare("INSERT INTO asignaciones_workflow 
-                                 (contrato_id, etapa, usuario_asignado, usuario_asigno, comentarios, estado)
-                                 VALUES (?, ?, ?, ?, ?, 'pendiente')");
+                                 (contrato_id, etapa, usuario_asignado, usuario_asigno, comentarios, estado, fecha_asignacion)
+                                 VALUES (?, ?, ?, ?, ?, 'pendiente', NOW())");
         $stmt->bind_param("isiis", $contrato_id, $etapa, $usuario_asignado, $usuario_asigno, $comentarios);
-        
-        if (!$stmt->execute()) {
-            generarRespuestaJSON(false, 'Error al crear asignación: ' . $mysqli->error);
-            return;
-        }
+        $stmt->execute();
         
         // 3. Actualizar estado del contrato
-        $nuevo_estado = $etapa; // revision_abogado, administracion_tecnica, etc
-        $mysqli->query("UPDATE contratos 
-                       SET estado_workflow = '$nuevo_estado', fecha_cambio_estado = NOW()
-                       WHERE id = $contrato_id");
+        $stmt = $mysqli->prepare("UPDATE contratos 
+                                  SET estado_workflow = ?, fecha_cambio_estado = NOW()
+                                  WHERE id = ?");
+        $stmt->bind_param("si", $etapa, $contrato_id);
+        $stmt->execute();
         
         // 4. Cerrar tiempo en etapa actual
-        $mysqli->query("UPDATE tiempo_etapas 
-                       SET fecha_salida = NOW(), activo = 0
-                       WHERE contrato_id = $contrato_id AND activo = 1");
+        $stmt = $mysqli->prepare("UPDATE tiempo_etapas 
+                                  SET fecha_salida = NOW(), activo = 0
+                                  WHERE contrato_id = ? AND activo = 1");
+        $stmt->bind_param("i", $contrato_id);
+        $stmt->execute();
         
         // 5. Crear nuevo registro de tiempo
-        $mysqli->query("INSERT INTO tiempo_etapas (contrato_id, etapa, fecha_entrada, activo)
-                       VALUES ($contrato_id, '$etapa', NOW(), 1)");
+        $stmt = $mysqli->prepare("INSERT INTO tiempo_etapas (contrato_id, etapa, fecha_entrada, activo)
+                                  VALUES (?, ?, NOW(), 1)");
+        $stmt->bind_param("is", $contrato_id, $etapa);
+        $stmt->execute();
         
+        // Confirmar transacción
+        $mysqli->commit();
         generarRespuestaJSON(true, 'Usuario asignado exitosamente');
+        
+    } catch (Exception $e) {
+        // Revertir transacción en caso de error
+        $mysqli->rollback();
+        generarRespuestaJSON(false, 'Error al asignar usuario: ' . $e->getMessage());
     }
 }
 
@@ -193,11 +189,38 @@ function cambiarEstadoContrato() {
     // Si el estado es "en_elaboracion", marcar como no editable
     $puede_editar = in_array($nuevo_estado, ['en_elaboracion', 'para_firmas', 'publicado_aprobado', 'publicado_rechazado', 'publicado_corregido']) ? 0 : 1;
     
-    // Usar procedimiento almacenado
-    $stmt = $mysqli->prepare("CALL cambiar_estado_contrato(?, ?, ?)");
-    $stmt->bind_param("isi", $contrato_id, $nuevo_estado, $usuario_id);
+    // Cambiar estado usando SQL directo (sin procedimiento almacenado)
+    $mysqli->begin_transaction();
     
-    if ($stmt->execute()) {
+    try {
+        // Obtener estado actual
+        $stmt = $mysqli->prepare("SELECT estado_workflow FROM contratos WHERE id = ?");
+        $stmt->bind_param("i", $contrato_id);
+        $stmt->execute();
+        $estado_actual = $stmt->get_result()->fetch_assoc()['estado_workflow'];
+        
+        // Actualizar contrato
+        $stmt = $mysqli->prepare("UPDATE contratos
+                                  SET estado_workflow = ?,
+                                      fecha_cambio_estado = NOW(),
+                                      puede_editar = ?
+                                  WHERE id = ?");
+        $stmt->bind_param("sii", $nuevo_estado, $puede_editar, $contrato_id);
+        $stmt->execute();
+        
+        // Cerrar tiempo en etapa actual
+        $stmt = $mysqli->prepare("UPDATE tiempo_etapas
+                                  SET fecha_salida = NOW(), activo = 0
+                                  WHERE contrato_id = ? AND activo = 1");
+        $stmt->bind_param("i", $contrato_id);
+        $stmt->execute();
+        
+        // Crear nuevo registro de tiempo
+        $stmt = $mysqli->prepare("INSERT INTO tiempo_etapas (contrato_id, etapa, fecha_entrada, activo)
+                                  VALUES (?, ?, NOW(), 1)");
+        $stmt->bind_param("is", $contrato_id, $nuevo_estado);
+        $stmt->execute();
+        
         // Si el estado es 'administracion_tecnica', asignar a un administrador técnico
         if ($nuevo_estado === 'administracion_tecnica') {
             // Obtener el primer administrador técnico activo
@@ -216,9 +239,12 @@ function cambiarEstadoContrato() {
             }
         }
         
+        $mysqli->commit();
         generarRespuestaJSON(true, 'Estado actualizado exitosamente');
-    } else {
-        generarRespuestaJSON(false, 'Error al cambiar estado: ' . $mysqli->error);
+        
+    } catch (Exception $e) {
+        $mysqli->rollback();
+        generarRespuestaJSON(false, 'Error al cambiar estado: ' . $e->getMessage());
     }
 }
 
@@ -270,17 +296,39 @@ function devolverContrato() {
         return;
     }
     
-    // Cambiar estado del contrato
-    $stmt = $mysqli->prepare("CALL cambiar_estado_contrato(?, ?, ?)");
-    $stmt->bind_param("isi", $contrato_id, $etapa_destino, $usuario_devuelve);
-    $stmt->execute();
+    // Cambiar estado del contrato usando SQL directo
+    $mysqli->begin_transaction();
     
-    // Marcar como editable de nuevo
-    $stmt = $mysqli->prepare("UPDATE contratos SET puede_editar = 1 WHERE id = ?");
-    $stmt->bind_param("i", $contrato_id);
-    $stmt->execute();
-    
-    generarRespuestaJSON(true, 'Contrato devuelto exitosamente');
+    try {
+        // Actualizar contrato
+        $stmt = $mysqli->prepare("UPDATE contratos
+                                  SET estado_workflow = ?,
+                                      fecha_cambio_estado = NOW(),
+                                      puede_editar = 1
+                                  WHERE id = ?");
+        $stmt->bind_param("si", $etapa_destino, $contrato_id);
+        $stmt->execute();
+        
+        // Cerrar tiempo en etapa actual
+        $stmt = $mysqli->prepare("UPDATE tiempo_etapas
+                                  SET fecha_salida = NOW(), activo = 0
+                                  WHERE contrato_id = ? AND activo = 1");
+        $stmt->bind_param("i", $contrato_id);
+        $stmt->execute();
+        
+        // Crear nuevo registro de tiempo
+        $stmt = $mysqli->prepare("INSERT INTO tiempo_etapas (contrato_id, etapa, fecha_entrada, activo)
+                                  VALUES (?, ?, NOW(), 1)");
+        $stmt->bind_param("is", $contrato_id, $etapa_destino);
+        $stmt->execute();
+        
+        $mysqli->commit();
+        generarRespuestaJSON(true, 'Contrato devuelto exitosamente');
+        
+    } catch (Exception $e) {
+        $mysqli->rollback();
+        generarRespuestaJSON(false, 'Error al devolver contrato: ' . $e->getMessage());
+    }
 }
 
 function atenderDevolucion() {
