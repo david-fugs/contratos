@@ -207,10 +207,8 @@ function importarExcel() {
                 $usuario = $cedula;
             }
             
-            // Validar tipo de usuario
-            if (!in_array($tipoUsuario, ['administrador', 'abogado', 'usuario'])) {
-                $tipoUsuario = 'usuario';
-            }
+            // Siempre crear como tipo usuario
+            $tipoUsuario = 'usuario';
             
             // Verificar si el usuario ya existe
             $usuarioEsc = $mysqli->real_escape_string($usuario);

@@ -331,8 +331,10 @@ function mostrarModalSubirExcel() {
                     <strong>Columnas requeridas:</strong><br>
                     - NOMBRE COMPLETO<br>
                     - CEDULA<br>
-                    - USUARIO<br>
-                    - TIPO USUARIO (administrador o abogado)
+                    - USUARIO (opcional, si no se proporciona se usa la cédula)
+                </p>
+                <p style="font-size: 13px; color: #3b82f6; margin-top: 10px;">
+                    <strong>Nota:</strong> Todos los usuarios se crearán como tipo "Usuario" con contraseña igual a su cédula.
                 </p>
             </div>
             <input type="file" id="archivoExcel" accept=".xlsx,.xls" class="swal2-input" style="width: 90%;">

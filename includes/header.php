@@ -64,6 +64,15 @@ $paginaActual = basename($_SERVER['PHP_SELF'], '.php');
                     </a>
                 </li>
 
+                <?php if (esAbogado() || $_SESSION['tipo_usuario'] === 'usuario'): ?>
+                <li>
+                    <a href="contrato_seguimiento.php" class="<?php echo $paginaActual === 'contrato_seguimiento' ? 'active' : ''; ?>">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Seguimiento Contratos</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+
                 <?php if (esAdministradorTecnico()): ?>
                 <li>
                     <a href="cdp_gestionar.php" class="<?php echo $paginaActual === 'cdp_gestionar' ? 'active' : ''; ?>">
