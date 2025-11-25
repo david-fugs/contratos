@@ -3,6 +3,9 @@
  * Controlador de Contratos
  */
 
+// Prevenir cualquier salida antes del JSON
+ob_start();
+
 require_once __DIR__ . '/../config/config.php';
 verificarSesion();
 
@@ -54,20 +57,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function crearContrato() {
     global $mysqli;
     
-    // Procesar municipios de trabajo
-    $trabajo_municipio = isset($_POST['trabajo_municipio']) ? implode(',', $_POST['trabajo_municipio']) : '';
-    
-    // Validar número de documento único
-    $numero_documento = sanitizar($_POST['numero_documento'] ?? '');
-    $stmt_check = $mysqli->prepare("SELECT id FROM contratos WHERE numero_documento = ?");
-    $stmt_check->bind_param("s", $numero_documento);
-    $stmt_check->execute();
-    $result_check = $stmt_check->get_result();
-    
-    if ($result_check->num_rows > 0) {
-        generarRespuestaJSON(false, 'Ya existe un contrato con este número de documento');
+    try {
+        // Procesar municipios de trabajo
+        $trabajo_municipio = isset($_POST['trabajo_municipio']) ? implode(',', $_POST['trabajo_municipio']) : '';
+        
+        // Validar número de documento único
+        $numero_documento = sanitizar($_POST['numero_documento'] ?? '');
+        
+        if (empty($numero_documento)) {
+            generarRespuestaJSON(false, 'El número de documento es obligatorio');
+        }
+        
+        $stmt_check = $mysqli->prepare("SELECT id FROM contratos WHERE numero_documento = ?");
+        if (!$stmt_check) {
+            generarRespuestaJSON(false, 'Error en la consulta de verificación: ' . $mysqli->error);
+        }
+        
+        $stmt_check->bind_param("s", $numero_documento);
+        $stmt_check->execute();
+        $result_check = $stmt_check->get_result();
+        
+        if ($result_check->num_rows > 0) {
+            generarRespuestaJSON(false, 'Ya existe un contrato con este número de documento');
+        }
+        $stmt_check->close();
+    } catch (Exception $e) {
+        generarRespuestaJSON(false, 'Error en la validación inicial: ' . $e->getMessage());
     }
-    $stmt_check->close();
     
     // Preparar datos
     $fecha_diligenciamiento = $_POST['fecha_diligenciamiento'] ?? date('Y-m-d');
@@ -120,6 +136,10 @@ function crearContrato() {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     
     $stmt = $mysqli->prepare($sql);
+    
+    if (!$stmt) {
+        generarRespuestaJSON(false, 'Error al preparar la consulta: ' . $mysqli->error);
+    }
     $stmt->bind_param(
         "sssssssssssssisssssssssssssssssssiis",
         $fecha_diligenciamiento, $correo_electronico, $tipo_documento, $numero_documento,
@@ -138,8 +158,30 @@ function crearContrato() {
         
         // Procesar archivos
         $archivos_subidos = 0;
+        $errores_archivos = [];
+        
         foreach ($_FILES as $key => $file) {
-            if (strpos($key, 'archivo_') === 0 && $file['error'] === UPLOAD_ERR_OK) {
+            if (strpos($key, 'archivo_') === 0) {
+                // Verificar errores de PHP en la subida
+                if ($file['error'] !== UPLOAD_ERR_OK) {
+                    $error_msg = '';
+                    switch ($file['error']) {
+                        case UPLOAD_ERR_INI_SIZE:
+                        case UPLOAD_ERR_FORM_SIZE:
+                            $error_msg = "El archivo '{$file['name']}' excede el tamaño máximo permitido por el servidor";
+                            break;
+                        case UPLOAD_ERR_PARTIAL:
+                            $error_msg = "El archivo '{$file['name']}' se subió parcialmente";
+                            break;
+                        case UPLOAD_ERR_NO_FILE:
+                            continue 2; // Saltar archivo si no se seleccionó
+                        default:
+                            $error_msg = "Error al subir el archivo '{$file['name']}' (código: {$file['error']})";
+                    }
+                    $errores_archivos[] = $error_msg;
+                    continue;
+                }
+                
                 $index = str_replace('archivo_', '', $key);
                 $tipo_documento_archivo = sanitizar($_POST["tipo_documento_$index"] ?? '');
                 
@@ -147,6 +189,8 @@ function crearContrato() {
                     $resultado = subirArchivo($file, $numero_documento, $tipo_documento_archivo, $contrato_id);
                     if ($resultado['success']) {
                         $archivos_subidos++;
+                    } else {
+                        $errores_archivos[] = $resultado['message'];
                     }
                 }
             }
@@ -154,12 +198,17 @@ function crearContrato() {
         
         // Registrar auditoría
         $stmt_audit = $mysqli->prepare("INSERT INTO auditoria (tabla, registro_id, accion, usuario_id, datos_nuevos) VALUES ('contratos', ?, 'crear', ?, ?)");
-        $datos_nuevos = json_encode(['numero_documento' => $numero_documento, 'nombre_completo' => $nombre_completo]);
+        $datos_nuevos = json_encode(['numero_documento' => $numero_documento, 'nombre_completo' => $nombre_completo], JSON_UNESCAPED_UNICODE);
         $stmt_audit->bind_param("iis", $contrato_id, $_SESSION['usuario_id'], $datos_nuevos);
         $stmt_audit->execute();
         $stmt_audit->close();
         
-        generarRespuestaJSON(true, "Contrato creado exitosamente. Documentos subidos: $archivos_subidos", ['id' => $contrato_id]);
+        $mensaje = "Contrato creado exitosamente. Documentos subidos: $archivos_subidos";
+        if (!empty($errores_archivos)) {
+            $mensaje .= ". Advertencias: " . implode(", ", $errores_archivos);
+        }
+        
+        generarRespuestaJSON(true, $mensaje, ['id' => $contrato_id]);
     } else {
         generarRespuestaJSON(false, 'Error al crear el contrato: ' . $mysqli->error);
     }
@@ -171,14 +220,23 @@ function subirArchivo($file, $numero_documento, $tipo_documento, $contrato_id) {
     global $mysqli;
     
     // Validar tamaño
+    $tamaño_mb = round($file['size'] / (1024 * 1024), 2);
+    $limite_mb = round(MAX_FILE_SIZE / (1024 * 1024), 0);
+    
     if ($file['size'] > MAX_FILE_SIZE) {
-        return ['success' => false, 'message' => 'El archivo excede el tamaño máximo permitido (5MB)'];
+        return [
+            'success' => false, 
+            'message' => "El archivo '{$file['name']}' ({$tamaño_mb}MB) excede el tamaño máximo permitido ({$limite_mb}MB)"
+        ];
     }
     
     // Validar extensión
     $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     if (!in_array($extension, ALLOWED_EXTENSIONS)) {
-        return ['success' => false, 'message' => 'Extensión de archivo no permitida'];
+        return [
+            'success' => false, 
+            'message' => "La extensión '.{$extension}' del archivo '{$file['name']}' no está permitida. Extensiones permitidas: " . implode(', ', ALLOWED_EXTENSIONS)
+        ];
     }
     
     // Crear nombre único
