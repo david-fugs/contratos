@@ -493,6 +493,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
     <!-- SECCIÓN 6: ASIGNACIÓN DE ABOGADO -->
+    <?php if ($_SESSION['tipo_usuario'] !== 'usuario'): ?>
     <div class="form-section">
         <div class="form-section-title">
             <i class="fas fa-user-tie"></i> Asignación de Abogado
@@ -514,6 +515,7 @@ require_once __DIR__ . '/../includes/header.php';
             <small class="form-text">Si asigna un abogado, se comenzará a contar el tiempo desde el momento de asignación.</small>
         </div>
     </div>
+    <?php endif; ?>
 
     <!-- SECCIÓN 7: TRATAMIENTO DE DATOS -->
     <div class="form-section">

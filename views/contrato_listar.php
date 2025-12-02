@@ -3,6 +3,13 @@ $pageTitle = 'Listar Contratos';
 require_once __DIR__ . '/../includes/header.php';
 
 // Obtener contratos con información de workflow
+$whereClause = "c.estado = 'activo'";
+
+// Si es usuario tipo 'usuario', solo mostrar sus propios contratos
+if ($_SESSION['tipo_usuario'] === 'usuario') {
+    $whereClause .= " AND c.usuario_creacion = " . intval($_SESSION['usuario_id']);
+}
+
 $query = "SELECT c.*, u.nombre as nombre_usuario_creacion,
           a.nombre as nombre_abogado_asignado,
           (SELECT COUNT(*) FROM documentos WHERE contrato_id = c.id) as total_documentos,
@@ -29,7 +36,7 @@ $query = "SELECT c.*, u.nombre as nombre_usuario_creacion,
           FROM contratos c
           LEFT JOIN usuarios u ON c.usuario_creacion = u.id
           LEFT JOIN usuarios a ON c.abogado_asignado = a.id
-          WHERE c.estado = 'activo'
+          WHERE " . $whereClause . "
           ORDER BY c.fecha_creacion DESC";
 $result = $mysqli->query($query);
 ?>
