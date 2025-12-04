@@ -493,6 +493,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
     <!-- SECCIÓN 6: ASIGNACIÓN DE ABOGADO -->
+    <?php if ($_SESSION['tipo_usuario'] !== 'usuario'): ?>
     <div class="form-section">
         <div class="form-section-title">
             <i class="fas fa-user-tie"></i> Asignación de Abogado
@@ -514,6 +515,7 @@ require_once __DIR__ . '/../includes/header.php';
             <small class="form-text">Si asigna un abogado, se comenzará a contar el tiempo desde el momento de asignación.</small>
         </div>
     </div>
+    <?php endif; ?>
 
     <!-- SECCIÓN 7: TRATAMIENTO DE DATOS -->
     <div class="form-section">
@@ -547,7 +549,7 @@ require_once __DIR__ . '/../includes/header.php';
 
         <p style="color: var(--gray-600); margin-bottom: 20px;">
             <i class="fas fa-info-circle"></i> 
-            Todos los documentos deben estar en formato PDF, JPG, PNG, DOC o DOCX. Tamaño máximo: 5MB por archivo.
+            Todos los documentos deben estar en formato PDF, JPG, PNG, DOC o DOCX. Tamaño máximo: 10MB por archivo.
         </p>
 
         <div id="documentos-container"></div>
@@ -727,7 +729,25 @@ document.getElementById('formContrato').addEventListener('submit', async functio
             body: formData
         });
         
-        const data = await response.json();
+        // Obtener el texto de la respuesta primero
+        const responseText = await response.text();
+        console.log('Respuesta del servidor:', responseText);
+        
+        // Intentar parsear como JSON
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('Error al parsear JSON:', parseError);
+            console.error('Respuesta recibida:', responseText);
+            ocultarLoading();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Error en la respuesta del servidor. Por favor, revise la consola para más detalles.'
+            });
+            return;
+        }
         
         ocultarLoading();
         
@@ -748,11 +768,12 @@ document.getElementById('formContrato').addEventListener('submit', async functio
             });
         }
     } catch (error) {
+        console.error('Error completo:', error);
         ocultarLoading();
         Swal.fire({
             icon: 'error',
             title: 'Error',
-            text: 'Error al procesar la solicitud'
+            text: 'Error al procesar la solicitud: ' + error.message
         });
     }
 });

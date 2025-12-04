@@ -40,7 +40,7 @@ define('TIPOS_DOCUMENTOS', [
 
 // Extensiones de archivo permitidas
 define('ALLOWED_EXTENSIONS', ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']);
-define('MAX_FILE_SIZE', 5 * 1024 * 1024); // 5MB
+define('MAX_FILE_SIZE', 10 * 1024 * 1024); // 10MB
 
 // Funciones de utilidad
 function estaLogueado() {
@@ -222,12 +222,17 @@ function formatearTexto($texto) {
 }
 
 function generarRespuestaJSON($success, $message, $data = null) {
+    // Limpiar cualquier salida previa
+    if (ob_get_length()) {
+        ob_clean();
+    }
+    
     header('Content-Type: application/json');
     echo json_encode([
         'success' => $success,
         'message' => $message,
         'data' => $data
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
     exit();
 }
 
