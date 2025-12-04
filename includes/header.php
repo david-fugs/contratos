@@ -73,7 +73,31 @@ $paginaActual = basename($_SERVER['PHP_SELF'], '.php');
                 </li>
                 <?php endif; ?>
 
+                <?php if (esRevisorDocumentos()): ?>
+                <li>
+                    <a href="revisor_documentos_panel.php" class="<?php echo $paginaActual === 'revisor_documentos_panel' ? 'active' : ''; ?>">
+                        <i class="fas fa-clipboard-check"></i>
+                        <span>Mi Panel Revisor</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+
+                <?php if (esAbogado()): ?>
+                <li>
+                    <a href="abogado_panel.php" class="<?php echo $paginaActual === 'abogado_panel' ? 'active' : ''; ?>">
+                        <i class="fas fa-balance-scale"></i>
+                        <span>Mi Panel Abogado</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+
                 <?php if (esAdministradorTecnico()): ?>
+                <li>
+                    <a href="administrador_tecnico_panel.php" class="<?php echo $paginaActual === 'administrador_tecnico_panel' ? 'active' : ''; ?>">
+                        <i class="fas fa-cogs"></i>
+                        <span>Mi Panel Admin Técnico</span>
+                    </a>
+                </li>
                 <li>
                     <a href="cdp_gestionar.php" class="<?php echo $paginaActual === 'cdp_gestionar' ? 'active' : ''; ?>">
                         <i class="fas fa-file-invoice-dollar"></i>
